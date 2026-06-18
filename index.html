@@ -1,0 +1,144 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>alpha-mirage — the backtest casino</title>
+<style>
+ :root{--bg:#070a10;--panel:#0f1521;--panel2:#0b0f18;--line:#1e2a3e;--ink:#eaf1ff;--mut:#8aa0bf;
+   --green:#27d08a;--red:#ff5d6c;--gold:#ffce54;--blue:#5b8cff;--warn:#ffb454;}
+ *{box-sizing:border-box}
+ body{margin:0;background:radial-gradient(1100px 650px at 75% -10%,#16261c 0%,var(--bg) 55%);color:var(--ink);
+   font:16px/1.55 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif;-webkit-font-smoothing:antialiased}
+ .wrap{max-width:920px;margin:0 auto;padding:36px 20px 80px}
+ .eyebrow{letter-spacing:.16em;text-transform:uppercase;font-size:12px;color:var(--gold);font-weight:700}
+ h1{font-size:30px;margin:.25em 0 .15em;line-height:1.15}
+ .sub{color:var(--mut);max-width:66ch}
+ .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-top:18px;box-shadow:0 20px 50px -30px #000}
+ .ctrls{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+ .toggle{display:flex;gap:6px}
+ .pill{font-size:13px;border:1px solid var(--line);background:#0c1422;color:var(--mut);padding:7px 13px;border-radius:999px;cursor:pointer}
+ .pill.on{border-color:var(--gold);color:#fff;background:#241f10}
+ input[type=range]{accent-color:var(--gold);height:5px;min-width:160px}
+ button.lever{background:linear-gradient(180deg,#ffce54,#f5a623);color:#1a1205;border:none;border-radius:11px;padding:11px 18px;font-weight:800;cursor:pointer;font-size:15px}
+ button.lever:hover{filter:brightness(1.05)}
+ .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}
+ .stat{background:#0a0f1a;border:1px solid var(--line);border-radius:12px;padding:13px 15px}
+ .stat .k{font-size:12px;color:var(--mut)}
+ .stat .v{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:3px}
+ svg{width:100%;height:auto;display:block;margin-top:6px}
+ .verdict{margin-top:16px;padding:13px 16px;border-radius:12px;font-size:15px;font-weight:600;border:1px solid}
+ .v-bad{background:#2a121a;color:#ffd7dc;border-color:#4d2030}
+ .note{margin-top:16px;border-left:3px solid var(--warn);background:#1a160c;padding:12px 15px;border-radius:0 10px 10px 0;color:#ecd9b0;font-size:14px}
+ .foot{margin-top:22px;color:var(--mut);font-size:13px;text-align:center}
+ a{color:var(--gold);text-decoration:none}a:hover{text-decoration:underline}
+ .leg{font-size:12.5px;color:var(--mut);display:flex;gap:16px;flex-wrap:wrap}
+ .sw{display:inline-block;width:12px;height:3px;vertical-align:middle;margin-right:5px;border-radius:2px}
+</style></head><body><div class="wrap">
+ <div class="eyebrow">alpha-mirage · live demo</div>
+ <h1>The backtest casino 🎰</h1>
+ <p class="sub">Search enough trading rules and one will look brilliant — on data with <b>no edge at all</b>. Pull the lever: it tries hundreds of moving-average strategies, keeps the best-looking one, then checks it <b>out-of-sample</b>. Watch the "alpha" evaporate.</p>
+
+ <div class="card">
+  <div class="ctrls">
+   <span style="font-size:13px;color:var(--mut)">data:</span>
+   <div class="toggle"><span class="pill on" id="rw">🎲 Pure random walk</span><span class="pill" id="mk">📈 Market-like</span></div>
+   <span style="font-size:13px;color:var(--mut)">strategies tried: <b id="kval" style="color:var(--ink)">200</b></span>
+   <input type="range" id="k" min="10" max="400" step="10" value="200">
+   <button class="lever" id="run">🎰 Pull the lever</button>
+  </div>
+
+  <div class="stats">
+   <div class="stat"><div class="k">Best in-sample Sharpe</div><div class="v" id="sIn" style="color:var(--green)">—</div></div>
+   <div class="stat"><div class="k">Out-of-sample Sharpe</div><div class="v" id="sOut" style="color:var(--red)">—</div></div>
+   <div class="stat"><div class="k">Deflated Sharpe</div><div class="v" id="sDef" style="color:var(--gold)">—</div></div>
+  </div>
+
+  <svg id="eq" viewBox="0 0 880 280"></svg>
+  <div class="leg">
+    <span><span class="sw" style="background:var(--green)"></span>in-sample (where we cherry-picked)</span>
+    <span><span class="sw" style="background:var(--red)"></span>out-of-sample (the honest test)</span>
+  </div>
+  <div class="verdict v-bad" id="verdict">—</div>
+ </div>
+
+ <div class="note">Educational — and the opposite of advice. The point is that a strategy chosen by searching its own backtest tells you almost nothing about the future. The <b>Deflated Sharpe Ratio</b> (Bailey &amp; López de Prado) prices in how many strategies you tried; below ~0.95 it's indistinguishable from luck. On a pure random walk, no edge can exist — yet the casino still hands you a Sharpe above 1.</div>
+ <div class="foot">Monte-Carlo data-snooping demo · deflated Sharpe vs. # trials · <a href="https://github.com/danielduongg/alpha-mirage" target="_blank">source &amp; the formal experiment →</a></div>
+</div>
+<script>
+// ---- seeded RNG ----
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(rng){let u=0,v=0;while(u===0)u=rng();while(v===0)v=rng();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+// ---- stats helpers ----
+function mean(a){let s=0;for(const x of a)s+=x;return s/a.length;}
+function std(a){const m=mean(a);let s=0;for(const x of a)s+=(x-m)*(x-m);return Math.sqrt(s/a.length);}
+const ANN=252;
+function sharpe(a){const s=std(a);return s===0?0:mean(a)/s*Math.sqrt(ANN);}
+function erf(x){const t=1/(1+0.3275911*Math.abs(x));const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);return x>=0?y:-y;}
+function normCdf(x){return 0.5*(1+erf(x/Math.SQRT2));}
+function normInv(p){ // Acklam
+ const a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00];
+ const b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,6.680131188771972e+01,-1.328068155288572e+01];
+ const c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,-2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00];
+ const d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,3.754408661907416e+00];
+ const pl=0.02425;let q,r;
+ if(p<pl){q=Math.sqrt(-2*Math.log(p));return(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
+ if(p<=1-pl){q=p-0.5;r=q*q;return(((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);}
+ q=Math.sqrt(-2*Math.log(1-p));return-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
+function skewKurt(a){const m=mean(a),s=std(a);let s3=0,s4=0;for(const x of a){const z=(x-m)/s;s3+=z*z*z;s4+=z*z*z*z;}return[s3/a.length,s4/a.length];}
+// ---- simulation ----
+function genReturns(n,kind,rng){const r=[];for(let i=0;i<n;i++){r.push(kind==='rw'?gauss(rng)*0.01:0.0003+gauss(rng)*0.01);}return r;}
+function rollMean(c,w){const out=new Array(c.length).fill(0);let s=0;for(let i=0;i<c.length;i++){s+=c[i];if(i>=w)s-=c[i-w];out[i]=s/Math.min(i+1,w);}return out;}
+function run(kind,K,seed){
+ const n=1500,rng=mulberry32(seed);const r=genReturns(n,kind,rng);
+ const cum=[];let acc=0;for(const x of r){acc+=x;cum.push(acc);}
+ const half=n>>1;
+ // grid of (fast,slow)
+ const grid=[];for(let f=2;f<=20;f+=2)for(let s=20;s<=120;s+=5)if(f<s)grid.push([f,s]);
+ // sample K combos deterministically
+ const pick=[];const step=Math.max(1,Math.floor(grid.length/K));for(let i=0;i<grid.length&&pick.length<K;i+=step)pick.push(grid[i]);
+ const inSRs=[];let best=null;
+ for(const [f,s] of pick){
+   const mf=rollMean(cum,f),ms=rollMean(cum,s);
+   const strat=new Array(n).fill(0);
+   for(let i=1;i<n;i++){const pos=mf[i-1]>ms[i-1]?1:-1;strat[i]=pos*r[i];}
+   const isr=sharpe(strat.slice(0,half));inSRs.push(isr);
+   if(!best||isr>best.isr)best={isr,f,s,strat};
+ }
+ const oos=sharpe(best.strat.slice(half));
+ // deflated sharpe
+ const Vann=std(inSRs)**2; const V=Vann/ANN; const K2=pick.length;const g=0.5772156649;
+ const emax=Math.sqrt(V)*((1-g)*normInv(1-1/K2)+g*normInv(1-1/(K2*Math.E)));
+ const srIs=best.isr/Math.sqrt(ANN);
+ const [sk,ku]=skewKurt(best.strat.slice(0,half));
+ const denom=Math.sqrt(Math.max(1e-9,1-sk*srIs+((ku-1)/4)*srIs*srIs));
+ const dsr=normCdf((srIs-emax)*Math.sqrt(half-1)/denom);
+ // equity curve of winner (cumulative strategy return)
+ const eq=[];let e=0;for(const x of best.strat){e+=x;eq.push(e);}
+ return {inSR:best.isr,oos,dsr,K:K2,eq,half,f:best.f,s:best.s};
+}
+// ---- render ----
+let kind='rw',seed=24;
+function draw(res){
+ document.getElementById('sIn').textContent=res.inSR.toFixed(2);
+ document.getElementById('sOut').textContent=res.oos.toFixed(2);
+ document.getElementById('sDef').textContent=(res.dsr*100).toFixed(0)+'%';
+ const W=880,H=280,pad=30;const eq=res.eq;const n=eq.length;
+ const mn=Math.min(...eq),mx=Math.max(...eq);
+ const xs=i=>pad+i/(n-1)*(W-pad-8);const ys=v=>H-22-(v-mn)/(mx-mn||1)*(H-40);
+ const split=res.half;
+ let inPts='',outPts='';
+ for(let i=0;i<n;i++){const pt=xs(i).toFixed(1)+','+ys(eq[i]).toFixed(1)+' ';if(i<=split)inPts+=pt;if(i>=split)outPts+=pt;}
+ document.getElementById('eq').innerHTML=
+   `<line x1="${xs(split)}" y1="18" x2="${xs(split)}" y2="${H-20}" stroke="#42506e" stroke-dasharray="4 4" style="stroke:#42506e"/>`+
+   `<text x="${xs(split)-6}" y="14" fill="#8aa0bf" font-size="11" text-anchor="end">in-sample ↤</text>`+
+   `<text x="${xs(split)+6}" y="14" fill="#8aa0bf" font-size="11">↦ out-of-sample</text>`+
+   `<polyline points="${inPts.trim()}" fill="none" stroke="#27d08a" stroke-width="2.5"/>`+
+   `<polyline points="${outPts.trim()}" fill="none" stroke="#ff5d6c" stroke-width="2.5"/>`;
+ const v=document.getElementById('verdict');
+ v.innerHTML=`🎲 Tried <b>${res.K}</b> strategies on ${kind==='rw'?'a pure random walk (zero edge by construction)':'market-like noise'}. The winner (MA ${res.f}/${res.s}) looked like Sharpe <b>${res.inSR.toFixed(2)}</b> in-sample — but scored <b>${res.oos.toFixed(2)}</b> out-of-sample, and its Deflated Sharpe is <b>${(res.dsr*100).toFixed(0)}%</b> (needs ≥95% to be real). <b>It's a mirage.</b>`;
+}
+function go(){draw(run(kind,+document.getElementById('k').value,seed));}
+document.getElementById('rw').onclick=()=>{kind='rw';document.getElementById('rw').className='pill on';document.getElementById('mk').className='pill';go();};
+document.getElementById('mk').onclick=()=>{kind='mk';document.getElementById('mk').className='pill on';document.getElementById('rw').className='pill';go();};
+document.getElementById('k').addEventListener('input',e=>{document.getElementById('kval').textContent=e.target.value;go();});
+document.getElementById('run').onclick=()=>{seed=(Math.random()*1e9)|0;go();};
+go();
+</script></body></html>

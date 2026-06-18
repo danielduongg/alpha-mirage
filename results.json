@@ -1,0 +1,36 @@
+{
+  "example": {
+    "randomwalk": {
+      "kind": "randomwalk",
+      "K": 209,
+      "best_fast": 20,
+      "best_slow": 120,
+      "in_sample_sharpe": 1.67,
+      "out_of_sample_sharpe": 0.18,
+      "deflated_sharpe": 0.86,
+      "expected_max_sharpe_null": 1.04
+    },
+    "market": {
+      "kind": "market",
+      "K": 209,
+      "best_fast": 4,
+      "best_slow": 20,
+      "in_sample_sharpe": 1.06,
+      "out_of_sample_sharpe": -0.23,
+      "deflated_sharpe": 0.562,
+      "expected_max_sharpe_null": 0.97
+    }
+  },
+  "aggregate": {
+    "randomwalk": {
+      "mean_in_sample": 0.72,
+      "mean_out_of_sample": 0.1,
+      "mean_deflated": 0.424
+    },
+    "market": {
+      "mean_in_sample": 0.99,
+      "mean_out_of_sample": -0.04,
+      "mean_deflated": 0.583
+    }
+  }
+}

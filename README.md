@@ -1,5 +1,7 @@
 # 🎰 alpha-mirage — the backtest casino
 
+[![CI](https://github.com/danielduongg/alpha-mirage/actions/workflows/ci.yml/badge.svg)](https://github.com/danielduongg/alpha-mirage/actions)
+
 How easy is it to "discover" a winning trading strategy that is **pure luck**? Trivially easy — and this repo lets you feel it.
 
 ### ▶️ [Live demo](https://danielduongg.github.io/alpha-mirage/)
@@ -18,6 +20,18 @@ Searching `K` strategies and reporting the best in-sample Sharpe is **multiple-h
 | Market-like noise | ~0.80 | ~0.11 | ~0.43 |
 
 The **Deflated Sharpe Ratio** (Bailey & López de Prado, 2014) prices in the number of trials, the track-record length, and the skew/kurtosis of returns. Below ~0.95 it's statistically indistinguishable from luck — and the casino's "winners" never clear the bar.
+
+## Results
+
+![In-sample vs out-of-sample](fig_insample_vs_oos.png)
+![Distribution of searched Sharpes](fig_sharpe_distribution.png)
+![Deflated Sharpe vs number of strategies](fig_dsr_vs_k.png)
+
+Across 200 independent searches on pure random walks, the in-sample "winner" Sharpe and its out-of-sample Sharpe correlate ~**0.07** — i.e., not at all. The deflated Sharpe falls as you search more rules.
+
+## Tests & CI
+
+`pytest` asserts the mirage reproduces: in-sample beats out-of-sample by a wide margin, out-of-sample Sharpe ≈ 0 on a random walk, and the Deflated Sharpe never clears 0.95. GitHub Actions runs it on every push.
 
 ## Method
 

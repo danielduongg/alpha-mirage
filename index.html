@@ -59,6 +59,12 @@
   <div class="verdict v-bad" id="verdict">—</div>
  </div>
 
+   <div class="card">
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+     <div><div style="font-size:12.5px;color:var(--mut);margin-bottom:6px">Every strategy we tried (in-sample Sharpe) — we keep only the red one</div><svg id="hist" viewBox="0 0 420 210"></svg></div>
+     <div><div style="font-size:12.5px;color:var(--mut);margin-bottom:6px">Deflated Sharpe vs # strategies — more searching → harder to be real</div><svg id="dsrk" viewBox="0 0 420 210"></svg></div>
+   </div>
+  </div>
  <div class="note">Educational — and the opposite of advice. The point is that a strategy chosen by searching its own backtest tells you almost nothing about the future. The <b>Deflated Sharpe Ratio</b> (Bailey &amp; López de Prado) prices in how many strategies you tried; below ~0.95 it's indistinguishable from luck. On a pure random walk, no edge can exist — yet the casino still hands you a Sharpe above 1.</div>
  <div class="foot">Monte-Carlo data-snooping demo · deflated Sharpe vs. # trials · <a href="https://github.com/danielduongg/alpha-mirage" target="_blank">source &amp; the formal experiment →</a></div>
 </div>
@@ -84,7 +90,7 @@ function normInv(p){ // Acklam
  q=Math.sqrt(-2*Math.log(1-p));return-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
 function skewKurt(a){const m=mean(a),s=std(a);let s3=0,s4=0;for(const x of a){const z=(x-m)/s;s3+=z*z*z;s4+=z*z*z*z;}return[s3/a.length,s4/a.length];}
 // ---- simulation ----
-function genReturns(n,kind,rng){const r=[];for(let i=0;i<n;i++){r.push(kind==='rw'?gauss(rng)*0.01:0.0003+gauss(rng)*0.01);}return r;}
+function genReturns(n,kind,rng){const r=[];for(let i=0;i<n;i++){r.push(kind==='rw'?gauss(rng)*0.01:0.0003+gauss(rng)*0.0118);}return r;}
 function rollMean(c,w){const out=new Array(c.length).fill(0);let s=0;for(let i=0;i<c.length;i++){s+=c[i];if(i>=w)s-=c[i-w];out[i]=s/Math.min(i+1,w);}return out;}
 function run(kind,K,seed){
  const n=1500,rng=mulberry32(seed);const r=genReturns(n,kind,rng);
@@ -112,10 +118,39 @@ function run(kind,K,seed){
  const dsr=normCdf((srIs-emax)*Math.sqrt(half-1)/denom);
  // equity curve of winner (cumulative strategy return)
  const eq=[];let e=0;for(const x of best.strat){e+=x;eq.push(e);}
- return {inSR:best.isr,oos,dsr,K:K2,eq,half,f:best.f,s:best.s};
+ // deflated Sharpe as a function of # strategies searched
+ const dsrCurve=[]; const Kset=[5,10,25,50,100,200,400].filter(k=>k<=K2); if(!Kset.includes(K2))Kset.push(K2);
+ for(const k of Kset){ const sub=inSRs.slice(0,k); const Vk=(std(sub)**2)/ANN; const bestk=Math.max(...sub)/Math.sqrt(ANN);
+   const emaxk=Math.sqrt(Vk)*((1-g)*normInv(1-1/k)+g*normInv(1-1/(k*Math.E)));
+   const denk=Math.sqrt(Math.max(1e-9,1-sk*bestk+((ku-1)/4)*bestk*bestk));
+   dsrCurve.push([k, normCdf((bestk-emaxk)*Math.sqrt(half-1)/denk)]); }
+ return {inSR:best.isr,oos,dsr,K:K2,eq,half,f:best.f,s:best.s,inSRs:inSRs.slice(),dsrCurve};
 }
 // ---- render ----
 let kind='rw',seed=24;
+
+function drawHist(res){
+ const W=420,H=210,pad=30;const a=res.inSRs;const mn=Math.min(...a),mx=Math.max(...a);
+ const nb=18;const bins=new Array(nb).fill(0);a.forEach(v=>{let b=Math.floor((v-mn)/((mx-mn)||1)*(nb-1e-9));bins[Math.max(0,Math.min(nb-1,b))]++;});
+ const bm=Math.max(...bins);const xs=i=>pad+i/nb*(W-pad-8);const ys=v=>H-22-v/bm*(H-40);
+ let g='';bins.forEach((c,i)=>{g+=`<rect x="${xs(i)+1}" y="${ys(c)}" width="${(W-pad-8)/nb-2}" height="${H-22-ys(c)}" fill="#5b8cff" opacity=".85"/>`;});
+ const bx=pad+((res.inSR-mn)/((mx-mn)||1))*(W-pad-8);
+ g+=`<line x1="${bx}" y1="14" x2="${bx}" y2="${H-22}" stroke="#ff5d6c" stroke-width="2"/><text x="${bx}" y="11" fill="#ff5d6c" font-size="10" text-anchor="middle">winner ${res.inSR.toFixed(2)}</text>`;
+ g+=`<text x="${pad}" y="${H-6}" fill="#8aa0bf" font-size="10">${mn.toFixed(1)}</text><text x="${W-8}" y="${H-6}" fill="#8aa0bf" font-size="10" text-anchor="end">${mx.toFixed(1)}</text>`;
+ document.getElementById('hist').innerHTML=g;
+}
+function drawDsrK(res){
+ const W=420,H=210,pad=34;const c=res.dsrCurve;const kmax=Math.log(c[c.length-1][0]),kmin=Math.log(c[0][0]);
+ const xs=k=>pad+(Math.log(k)-kmin)/((kmax-kmin)||1)*(W-pad-10);const ys=v=>H-24-v*(H-42);
+ let g=`<line x1="${pad}" y1="${ys(0)}" x2="${W-10}" y2="${ys(0)}" style="stroke:#1e2a3e"/>`;
+ g+=`<line x1="${pad}" y1="${ys(0.95)}" x2="${W-10}" y2="${ys(0.95)}" stroke="#ff5d6c" stroke-dasharray="4 4"/><text x="${W-12}" y="${ys(0.95)-4}" fill="#ff5d6c" font-size="10" text-anchor="end">0.95 bar</text>`;
+ g+=`<polyline points="${c.map(([k,d])=>xs(k).toFixed(1)+','+ys(d).toFixed(1)).join(' ')}" fill="none" stroke="#27d08a" stroke-width="2.5"/>`;
+ c.forEach(([k,d])=>g+=`<circle cx="${xs(k).toFixed(1)}" cy="${ys(d).toFixed(1)}" r="3" fill="#27d08a"/>`);
+ g+=`<text x="${pad}" y="${H-8}" fill="#8aa0bf" font-size="10">${c[0][0]}</text><text x="${W-10}" y="${H-8}" fill="#8aa0bf" font-size="10" text-anchor="end">${c[c.length-1][0]} rules</text>`;
+ g+=`<text x="${pad-6}" y="${ys(1)+4}" fill="#8aa0bf" font-size="10" text-anchor="end">1</text><text x="${pad-6}" y="${ys(0)}" fill="#8aa0bf" font-size="10" text-anchor="end">0</text>`;
+ document.getElementById('dsrk').innerHTML=g;
+}
+
 function draw(res){
  document.getElementById('sIn').textContent=res.inSR.toFixed(2);
  document.getElementById('sOut').textContent=res.oos.toFixed(2);
@@ -133,7 +168,8 @@ function draw(res){
    `<polyline points="${inPts.trim()}" fill="none" stroke="#27d08a" stroke-width="2.5"/>`+
    `<polyline points="${outPts.trim()}" fill="none" stroke="#ff5d6c" stroke-width="2.5"/>`;
  const v=document.getElementById('verdict');
- v.innerHTML=`🎲 Tried <b>${res.K}</b> strategies on ${kind==='rw'?'a pure random walk (zero edge by construction)':'market-like noise'}. The winner (MA ${res.f}/${res.s}) looked like Sharpe <b>${res.inSR.toFixed(2)}</b> in-sample — but scored <b>${res.oos.toFixed(2)}</b> out-of-sample, and its Deflated Sharpe is <b>${(res.dsr*100).toFixed(0)}%</b> (needs ≥95% to be real). <b>It's a mirage.</b>`;
+ drawHist(res);drawDsrK(res);
+  v.innerHTML=`🎲 Tried <b>${res.K}</b> strategies on ${kind==='rw'?'a pure random walk (zero edge by construction)':'market-like noise'}. The winner (MA ${res.f}/${res.s}) looked like Sharpe <b>${res.inSR.toFixed(2)}</b> in-sample — but scored <b>${res.oos.toFixed(2)}</b> out-of-sample, and its Deflated Sharpe is <b>${(res.dsr*100).toFixed(0)}%</b> (needs ≥95% to be real). <b>It's a mirage.</b>`;
 }
 function go(){draw(run(kind,+document.getElementById('k').value,seed));}
 document.getElementById('rw').onclick=()=>{kind='rw';document.getElementById('rw').className='pill on';document.getElementById('mk').className='pill';go();};
